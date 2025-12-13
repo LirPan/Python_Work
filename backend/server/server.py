@@ -83,12 +83,42 @@ class SportsVenueServer:
         """
         action = request.get('action')
         data = request.get('data')
-        
+        # 请求不同的操作——>调用不同的处理函数
         if action == 'login':
             return self.handle_login(data)
-        # 这里可以继续添加 elif action == 'register': ...
+        elif action == 'register':
+            return self.handle_register(data)
+        elif action == 'get_available_slots':
+            return self.handle_get_slots(data)
+        elif action == 'book_venue':
+            return self.handle_book(data)
+        elif action == 'get_my_reservations':
+            return self.handle_get_reservations(data)
+        elif action == 'cancel_booking':
+            return self.handle_cancel(data)
         else:
             return {"status": "error", "message": f"未知的请求类型: {action}"}
+
+    def handle_register(self, data):
+        if not data:
+            return {"status": "error", "message": "缺少请求数据"}
+            
+        account = data.get('account')
+        password = data.get('password')
+        name = data.get('name')
+        role = data.get('role')
+        phone = data.get('phone')
+        
+        # 简单校验
+        if not all([account, password, name, role]):
+             return {"status": "error", "message": "账号、密码、姓名、角色为必填项"}
+             
+        success, message = self.db_manager.register_user(account, password, name, role, phone)
+        
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
 
     def handle_login(self, data):
         if not data:
@@ -106,6 +136,55 @@ class SportsVenueServer:
             return {"status": "success", "message": "登录成功", "user": result}
         else:
             return {"status": "fail", "message": result}
+
+    def handle_get_slots(self, data):
+        venue_id = data.get('venue_id')
+        date_str = data.get('date')
+        if not venue_id or not date_str:
+            return {"status": "error", "message": "缺少场馆ID或日期"}
+        
+        success, result = self.db_manager.get_available_slots(venue_id, date_str)
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_book(self, data):
+        user_account = data.get('user_account')
+        slot_id = data.get('slot_id')
+        
+        if not user_account or not slot_id:
+            return {"status": "error", "message": "缺少用户账号或时间段ID"}
+            
+        success, message = self.db_manager.create_reservation(user_account, slot_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_get_reservations(self, data):
+        user_account = data.get('user_account')
+        if not user_account:
+            return {"status": "error", "message": "缺少用户账号"}
+            
+        success, result = self.db_manager.get_user_reservations(user_account)
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_cancel(self, data):
+        user_account = data.get('user_account')
+        reservation_id = data.get('reservation_id')
+        
+        if not user_account or not reservation_id:
+            return {"status": "error", "message": "缺少必要参数"}
+            
+        success, message = self.db_manager.cancel_reservation(user_account, reservation_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
 
 if __name__ == '__main__':
     # 可以在这里配置 IP 和 端口

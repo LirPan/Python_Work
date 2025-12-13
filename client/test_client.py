@@ -30,10 +30,37 @@ def test_client():
             "action": "login",
             "data": {
                 "account": "2021001",
-                "password": "6543210"
+                "password": "wrong_password"
             }
         }
         send_request(client_socket, fail_request)
+
+        # 测试 3: 注册新用户
+        print("\n--- 测试 3: 注册新用户 ---")
+        import random
+        new_account = f"test_user_{random.randint(1000, 9999)}"
+        register_request = {
+            "action": "register",
+            "data": {
+                "account": new_account,
+                "password": "password123",
+                "name": "测试用户",
+                "role": "student",
+                "phone": "13800000000"
+            }
+        }
+        send_request(client_socket, register_request)
+
+        # 测试 4: 使用新注册的用户登录
+        print("\n--- 测试 4: 使用新注册的用户登录 ---")
+        login_new_request = {
+            "action": "login",
+            "data": {
+                "account": new_account,
+                "password": "password123"
+            }
+        }
+        send_request(client_socket, login_new_request)
         
     except ConnectionRefusedError:
         print("连接被拒绝。请确保服务器 (server/server.py) 正在运行。")
