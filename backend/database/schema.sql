@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS venues (
     venue_id INTEGER PRIMARY KEY AUTOINCREMENT,
     venue_name TEXT NOT NULL, -- 场馆名称 (如 "羽毛球馆")
-    venue_type TEXT NOT NULL, -- 场馆类型
     is_outdoor BOOLEAN NOT NULL, -- 是否户外 (0 = 室内, 1 = 户外)
     location TEXT, -- 场馆位置
     description TEXT -- 场馆描述
@@ -24,7 +23,6 @@ CREATE TABLE IF NOT EXISTS courts (
     court_id INTEGER PRIMARY KEY AUTOINCREMENT,
     venue_id INTEGER, -- 关联场馆 ID
     court_name TEXT NOT NULL, -- 场地名称 (如 "1 号场")
-    capacity INTEGER NOT NULL, -- 单时段可容纳人数
     FOREIGN KEY (venue_id) REFERENCES venues(venue_id)
 );
 
