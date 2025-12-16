@@ -96,6 +96,12 @@ class SportsVenueServer:
             return self.handle_get_reservations(data)
         elif action == 'cancel_booking':
             return self.handle_cancel(data)
+        elif action == 'add_schedule':
+            return self.handle_add_schedule(data)
+        elif action == 'remove_schedule':
+            return self.handle_remove_schedule(data)
+        elif action == 'get_my_schedules':
+            return self.handle_get_schedules(data)
         else:
             return {"status": "error", "message": f"未知的请求类型: {action}"}
 
@@ -185,6 +191,46 @@ class SportsVenueServer:
             return {"status": "success", "message": message}
         else:
             return {"status": "fail", "message": message}
+
+    def handle_add_schedule(self, data):
+        teacher_account = data.get('teacher_account')
+        venue_id = data.get('venue_id')
+        day_of_week = data.get('day_of_week') # 0-6
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        
+        if not all([teacher_account, venue_id, day_of_week is not None, start_time, end_time]):
+            return {"status": "error", "message": "缺少必要参数"}
+            
+        success, message = self.db_manager.add_teacher_schedule(teacher_account, venue_id, int(day_of_week), start_time, end_time)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_remove_schedule(self, data):
+        teacher_account = data.get('teacher_account')
+        schedule_id = data.get('schedule_id')
+        
+        if not teacher_account or not schedule_id:
+            return {"status": "error", "message": "缺少必要参数"}
+            
+        success, message = self.db_manager.remove_teacher_schedule(teacher_account, schedule_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_get_schedules(self, data):
+        teacher_account = data.get('teacher_account')
+        if not teacher_account:
+            return {"status": "error", "message": "缺少必要参数"}
+            
+        success, result = self.db_manager.get_teacher_schedules(teacher_account)
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
 
 if __name__ == '__main__':
     # 可以在这里配置 IP 和 端口

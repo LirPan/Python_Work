@@ -82,3 +82,15 @@ CREATE TABLE IF NOT EXISTS weather_info (
     temp_high INTEGER NOT NULL, -- 最高温度
     update_time DATETIME NOT NULL -- 更新时间
 );
+-- 9. 教师课表 (class_schedules)
+CREATE TABLE IF NOT EXISTS class_schedules (
+    schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_account TEXT,
+    venue_id INTEGER,
+    day_of_week INTEGER, -- 0=Monday, 6=Sunday
+    start_time TIME,
+    end_time TIME,
+    end_date DATE, -- 课表有效截止日期
+    FOREIGN KEY (teacher_account) REFERENCES users(user_account),
+    FOREIGN KEY (venue_id) REFERENCES venues(venue_id)
+);

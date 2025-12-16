@@ -73,6 +73,7 @@ def test_addData():
                     court_id = cursor.lastrowid
                     
                     # 3. 为每个场地生成未来 3 天的时间段 (9:00 - 22:00, 每小时一个)
+                    # 恢复为仅生成3天，因为教师课表逻辑已改为按需生成
                     for day_offset in range(3):
                         target_date = today + datetime.timedelta(days=day_offset)
                         
