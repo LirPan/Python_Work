@@ -114,15 +114,16 @@ class DBManager:
         cursor = conn.cursor()
         try:
             import datetime
-            # 1. 检查用户信用分 (需求：信用分过低可能限制预约，这里先做基础检查)
+            # 1. 检查用户信用分
             cursor.execute("SELECT credit_score FROM users WHERE user_account=?", (user_account,))
             user_res = cursor.fetchone()
             if not user_res:
                 return False, "用户不存在"
             credit_score = user_res[0]
-            # 逻辑：信用分限制 (示例：低于60分不能预约热门时段)
-            if is_hot and credit_score < 60:
-                return False, "您的信用分低于60，无法预约热门时段"
+            
+            # 逻辑：信用分限制 (低于60分禁止预约)
+            if credit_score <= 60:
+                return False, "您的信用分过低(≤60)，已被禁止预约。请等待一周后恢复。"
             
             # 2. 检查时间段状态 (容量、是否热门)
             cursor.execute("SELECT current_reservations, max_reservations, is_hot, start_time FROM time_slots WHERE slot_id=?", (slot_id,))
@@ -133,6 +134,10 @@ class DBManager:
             # 逻辑：如果满了，无法预约
             if current_res >= max_res:
                 return False, "该时段预约人数已满"
+            
+            # 逻辑：信用分限制 (示例：低于80分不能预约热门时段 - 可选)
+            if is_hot and credit_score <= 80:
+                 return False, "您的信用分低于80，无法预约热门时段"
             
             # 3. 检查用户是否在该时段已有预约 (防止冲突)
             # 这里简化处理，假设一个 slot_id 代表一个具体场地的具体时段
@@ -478,6 +483,134 @@ class DBManager:
                 })
             return True, res
         except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def check_in_reservation(self, user_account, reservation_id):
+        """
+        用户签到 (防止爽约)
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # 检查预约状态
+            cursor.execute("SELECT status FROM reservations WHERE reservation_id=? AND user_account=?", (reservation_id, user_account))
+            res = cursor.fetchone()
+            if not res:
+                return False, "预约不存在"
+            if res[0] != 'confirmed':
+                return False, f"当前状态({res[0]})无法签到"
+            
+            # 更新状态为 checked_in
+            cursor.execute("UPDATE reservations SET status='checked_in' WHERE reservation_id=?", (reservation_id,))
+            conn.commit()
+            return True, "签到成功"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def process_daily_tasks(self):
+        """
+        每日定时任务 (建议每晚10点执行)
+        1. 扫描爽约记录 (已结束且未签到 -> 扣10分)
+        2. 恢复信用分 (被禁用户一周后恢复)
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            import datetime
+            now = datetime.datetime.now()
+            today_date = now.date()
+            current_time_str = now.strftime('%H:%M:%S')
+            
+            # --- 任务1: 判定爽约 ---
+            # 查找所有: 
+            # 1. 状态为 'confirmed' (未签到)
+            # 2. 对应的 slot 日期 < 今天 OR (日期=今天 AND 结束时间 < 当前时间)
+            # 注意: 这里简化逻辑，假设只要结束时间过了且没签到就算爽约
+            
+            # 构造查询: 找出所有已结束但状态仍为 confirmed 的预约
+            # 关联 time_slots 表比较时间
+            sql_find_noshow = """
+                SELECT r.reservation_id, r.user_account, ts.date, ts.end_time
+                FROM reservations r
+                JOIN time_slots ts ON r.slot_id = ts.slot_id
+                WHERE r.status = 'confirmed'
+                AND (ts.date < ? OR (ts.date = ? AND ts.end_time < ?))
+            """
+            cursor.execute(sql_find_noshow, (today_date, today_date, current_time_str))
+            noshow_list = cursor.fetchall()
+            
+            for row in noshow_list:
+                res_id, user_acc, r_date, r_end = row
+                print(f"[Task] 发现爽约: 用户{user_acc} 预约ID{res_id} ({r_date} {r_end})")
+                
+                # 1. 更新预约状态
+                cursor.execute("UPDATE reservations SET status='no_show' WHERE reservation_id=?", (res_id,))
+                
+                # 2. 扣除信用分 (10分)
+                cursor.execute("UPDATE users SET credit_score = credit_score - 10 WHERE user_account=?", (user_acc,))
+                
+                # 3. 记录日志
+                cursor.execute("""
+                    INSERT INTO credit_logs (user_account, change_amount, reason, time)
+                    VALUES (?, -10, '爽约扣分', ?)
+                """, (user_acc, now))
+            
+            # --- 任务2: 恢复信用分 ---
+            # 规则: 一周后用户信用分恢复100分
+            # 逻辑: 查找当前信用分 <= 60 的用户
+            # 检查他们最后一次扣分记录是否在 7 天前
+            
+            cursor.execute("SELECT user_account, credit_score FROM users WHERE credit_score <= 60")
+            banned_users = cursor.fetchall()
+            
+            seven_days_ago = now - datetime.timedelta(days=7)
+            
+            for u_row in banned_users:
+                u_acc, u_score = u_row
+                
+                # 查找该用户最后一次扣分时间
+                cursor.execute("""
+                    SELECT MAX(time) FROM credit_logs 
+                    WHERE user_account = ? AND change_amount < 0
+                """, (u_acc,))
+                last_deduct_res = cursor.fetchone()
+                
+                should_restore = False
+                if last_deduct_res and last_deduct_res[0]:
+                    last_time_str = last_deduct_res[0]
+                    # SQLite datetime 可能是字符串，需解析
+                    # 假设格式为 YYYY-MM-DD HH:MM:SS.ssssss 或 YYYY-MM-DD HH:MM:SS
+                    try:
+                        # 尝试解析 (简化处理，直接比较字符串通常也行，如果格式标准)
+                        last_time = datetime.datetime.strptime(last_time_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
+                        if last_time < seven_days_ago:
+                            should_restore = True
+                    except Exception as e:
+                        print(f"[Task] 解析时间出错: {e}")
+                else:
+                    # 如果没有扣分记录但分低(可能是手动改的?)，或者记录丢失，默认恢复? 
+                    # 为了安全，暂不恢复，或者直接恢复
+                    pass
+
+                if should_restore:
+                    print(f"[Task] 用户 {u_acc} 封禁期已过，恢复信用分至 100")
+                    cursor.execute("UPDATE users SET credit_score = 100 WHERE user_account=?", (u_acc,))
+                    cursor.execute("""
+                        INSERT INTO credit_logs (user_account, change_amount, reason, time)
+                        VALUES (?, ?, '封禁期满恢复', ?)
+                    """, (u_acc, 100 - u_score, now))
+
+            conn.commit()
+            return True, f"任务执行完毕. 处理爽约:{len(noshow_list)}人"
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"[Task Error] {e}")
             return False, str(e)
         finally:
             conn.close()

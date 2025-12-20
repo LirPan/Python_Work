@@ -25,26 +25,6 @@ class SportsVenueServer:
         self.db_manager = DBManager()
         self.running = True
 
-    def start(self):
-        try:
-            self.server_socket.bind((self.host, self.port))
-            self.server_socket.listen(5)
-            print(f"[*] 服务器已启动，监听 {self.host}:{self.port}")
-            print(f"[*] 等待客户端连接...")
-            
-            while self.running:
-                client_sock, addr = self.server_socket.accept()
-                print(f"[*] 接受连接来自: {addr}")
-                
-                # 为每个客户端创建一个独立的线程进行处理
-                client_handler = threading.Thread(target=self.handle_client, args=(client_sock,))
-                client_handler.daemon = True # 设置为守护线程，主程序退出时自动结束
-                client_handler.start()
-        except Exception as e:
-            print(f"[!] 服务器启动失败: {e}")
-        finally:
-            self.server_socket.close()
-
     def handle_client(self, client_socket):
         try:
             while True:
@@ -102,6 +82,8 @@ class SportsVenueServer:
             return self.handle_remove_schedule(data)
         elif action == 'get_my_schedules':
             return self.handle_get_schedules(data)
+        elif action == 'check_in':
+            return self.handle_check_in(data)
         else:
             return {"status": "error", "message": f"未知的请求类型: {action}"}
 
@@ -231,6 +213,69 @@ class SportsVenueServer:
             return {"status": "success", "data": result}
         else:
             return {"status": "fail", "message": result}
+
+    def handle_check_in(self, data):
+        user_account = data.get('user_account')
+        reservation_id = data.get('reservation_id')
+        
+        if not user_account or not reservation_id:
+            return {"status": "error", "message": "缺少必要参数"}
+            
+        success, message = self.db_manager.check_in_reservation(user_account, reservation_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def start_scheduler(self):
+        """
+        启动后台定时任务线程
+        """
+        import time
+        import datetime
+        
+        def run_schedule():
+            print("[Scheduler] 定时任务线程已启动")
+            while self.running:
+                now = datetime.datetime.now()
+                # 每天晚上 22:00 执行 (这里为了演示，可以设为每分钟检查一次，或者严格判断时间)
+                # 简单逻辑: 每分钟检查一次，如果是 22:00 则执行
+                if now.hour == 22 and now.minute == 0:
+                    print(f"[Scheduler] 开始执行每日检查爽约任务 @ {now}")
+                    self.db_manager.process_daily_tasks()
+                    # 休眠 61 秒防止重复执行
+                    time.sleep(61)
+                else:
+                    # 每 30 秒检查一次时间
+                    time.sleep(30)
+        
+        scheduler_thread = threading.Thread(target=run_schedule)
+        scheduler_thread.daemon = True
+        scheduler_thread.start()
+
+    def start(self):
+        try:
+            self.server_socket.bind((self.host, self.port))
+            self.server_socket.listen(5)
+            print(f"[*] 服务器已启动，监听 {self.host}:{self.port}")
+            
+            # 启动定时任务
+            self.start_scheduler()
+            
+            print(f"[*] 等待客户端连接...")
+            
+            while self.running:
+                client_sock, addr = self.server_socket.accept()
+                print(f"[*] 接受连接来自: {addr}")
+                
+                # 为每个客户端创建一个独立的线程进行处理
+                client_handler = threading.Thread(target=self.handle_client, args=(client_sock,))
+                client_handler.daemon = True # 设置为守护线程，主程序退出时自动结束
+                client_handler.start()
+        except Exception as e:
+            print(f"[!] 服务器启动失败: {e}")
+        finally:
+            self.server_socket.close()
 
 if __name__ == '__main__':
     # 可以在这里配置 IP 和 端口
