@@ -5,6 +5,7 @@ import sys
 import os
 import sqlite3
 
+#该py文件用于后端开发时模拟客户操作
 # 配置
 HOST = '127.0.0.1'
 PORT = 8888
