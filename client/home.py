@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QFrame, 
-                             QComboBox, QDateEdit, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy, QMessageBox)
+                             QComboBox, QDateEdit, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy, QMessageBox, QStackedWidget)
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QPalette
 
@@ -9,9 +9,11 @@ from PyQt5.QtGui import QFont, QColor, QPalette
 try:
     from log_in import LoginWindow, NetworkClient
     from import_class import TeacherDashboard
+    from admin import AdminWidget
 except ImportError:
     from client.log_in import LoginWindow, NetworkClient
     from client.import_class import TeacherDashboard
+    from client.admin import AdminWidget
 
 class HomeWindow(QMainWindow):
     def __init__(self):
@@ -42,14 +44,29 @@ class HomeWindow(QMainWindow):
         # 1. Navigation Bar
         self.setup_navbar()
         
-        # 2. Hero Section (Title + Background Placeholder)
-        self.setup_hero_section()
+        # 2. Content Area (Stacked Widget)
+        self.content_stack = QStackedWidget()
+        self.main_layout.addWidget(self.content_stack)
         
-        # 3. Search Card (The floating box)
-        self.setup_search_card()
+        # 3. Initialize Home Page
+        self.setup_home_page()
+
+    def setup_home_page(self):
+        self.home_page = QWidget()
+        self.home_layout = QVBoxLayout(self.home_page)
+        self.home_layout.setContentsMargins(0, 0, 0, 0)
+        self.home_layout.setSpacing(0)
         
-        # Spacer at the bottom to push everything up slightly
-        # self.main_layout.addStretch() # Removed to allow hero section to expand
+        # Hero Section (Title + Background Placeholder)
+        self.setup_hero_section(self.home_layout)
+        
+        # Search Card (The floating box)
+        self.setup_search_card(self.home_layout)
+        
+        # Spacer at the bottom
+        self.home_layout.addStretch(1)
+        
+        self.content_stack.addWidget(self.home_page)
 
     def setup_navbar(self):
         """Top Navigation Bar"""
@@ -176,7 +193,7 @@ class HomeWindow(QMainWindow):
             else:
                 btn.setStyleSheet(base_style)
 
-    def setup_hero_section(self):
+    def setup_hero_section(self, parent_layout):
         """Center Title and Background Area"""
         hero_frame = QFrame()
         hero_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -209,9 +226,9 @@ class HomeWindow(QMainWindow):
         hero_layout.addStretch() # Push content up a bit
         
         # Add hero frame with stretch factor 2 to make it consume less vertical space (moving card up)
-        self.main_layout.addWidget(hero_frame, 2)
+        parent_layout.addWidget(hero_frame, 2)
 
-    def setup_search_card(self):
+    def setup_search_card(self, parent_layout):
         """The floating search box at the bottom"""
         # Container to center the card
         container = QWidget()
@@ -333,7 +350,7 @@ class HomeWindow(QMainWindow):
         # Add card to container
         container_layout.addWidget(card)
         
-        self.main_layout.addWidget(container)
+        parent_layout.addWidget(container)
         # Add stretch at the bottom to push the card up slightly (adaptive)
         self.main_layout.addStretch(1)
 
@@ -375,24 +392,63 @@ class HomeWindow(QMainWindow):
         """Callback when user logs out from dashboard"""
         self.current_user = None
         print("User logged out")
-        self.show()
+        
+        # Switch back to Home
+        self.content_stack.setCurrentIndex(0)
+        self.set_active_nav(self.nav_buttons[0])
+        
+        # Clean up dashboards
+        if hasattr(self, 'teacher_page'):
+            self.content_stack.removeWidget(self.teacher_page)
+            del self.teacher_page
+        
+        if hasattr(self, 'admin_page'):
+            self.content_stack.removeWidget(self.admin_page)
+            del self.admin_page
 
     def handle_nav_click(self, btn, name):
         """Handle navigation button clicks with permission checks"""
+        if name == "Home":
+            self.content_stack.setCurrentIndex(0)
+            self.set_active_nav(btn)
+            return
+
         if name == "管理课表":
             if not self.current_user:
                 self.open_login_window()
                 return
             
             if self.current_user['role'] == 'student':
-                QMessageBox.warning(self, "权限不足", "此为教师功能，你没有该权限！")
+                QMessageBox.warning(self, "权限不足", "此为教师/管理员功能，你没有该权限！")
                 return
             
-            if self.current_user['role'] == 'teacher':
-                # Open Teacher Dashboard (Import Class)
-                self.teacher_dashboard = TeacherDashboard(self.network, self.current_user, self.on_logout_success)
-                self.teacher_dashboard.show()
-                # self.hide() # Optional: hide home window or keep it open
+            else:
+                # Switch to Teacher Dashboard in Stack
+                if not hasattr(self, 'teacher_page'):
+                    self.teacher_page = TeacherDashboard(self.network, self.current_user, self.on_logout_success)
+                    self.content_stack.addWidget(self.teacher_page)
+                
+                self.content_stack.setCurrentWidget(self.teacher_page)
+                self.set_active_nav(btn)
+                return
+        
+        elif name == "后台管理":
+            if not self.current_user:
+                self.open_login_window()
+                return
+            
+            if self.current_user['role'] != 'admin':
+                QMessageBox.warning(self, "权限不足", "此为管理员功能，你没有该权限！")
+                return
+            
+            # Switch to Admin Page in Stack
+            if not hasattr(self, 'admin_page'):
+                self.admin_page = AdminWidget(self.network, self.current_user)
+                self.content_stack.addWidget(self.admin_page)
+            
+            self.content_stack.setCurrentWidget(self.admin_page)
+            self.set_active_nav(btn)
+            return
         
         # For other tabs or if permission granted (though for "管理课表" we might open a new window instead of switching tab)
         # If we want to switch tab style:

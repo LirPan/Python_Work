@@ -27,7 +27,11 @@ class NetworkClient:
             print(f"连接服务器失败: {e}")
             return False
 
-    def send_request(self, action, data):
+    def send_request(self, action, data=None):
+        if isinstance(action, dict) and data is None:
+            data = action.get("data", {})
+            action = action.get("action")
+
         if not self.client_socket:
             if not self.connect():
                 return {"status": "error", "message": "无法连接到服务器"}
@@ -189,8 +193,11 @@ class LoginWindow(QWidget):
             if user['role'] == 'teacher':
                 QMessageBox.information(self, "提示", f"现在为教师端。\n欢迎教师用户: {user['name']}")
                 self.close() # Close login window to return to Home
-            else:
+            elif user['role'] == 'student':
                 QMessageBox.information(self, "提示", f"现在为学生端。\n欢迎学生用户: {user['name']}")
+                self.close() # Close login window to return to Home
+            elif user['role'] == 'admin':
+                QMessageBox.information(self, "提示", f"现在为管理员端。\n欢迎管理员用户: {user['name']}")
                 self.close() # Close login window to return to Home
         else:
             QMessageBox.critical(self, "登录失败", resp.get("message", "未知错误"))

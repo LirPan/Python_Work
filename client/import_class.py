@@ -165,5 +165,5 @@ class TeacherDashboard(QWidget):
                                      QMessageBox.Yes | QMessageBox.No, 
                                      QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.close()
+            # self.close() # Embedded mode: let parent handle visibility
             self.on_logout()
