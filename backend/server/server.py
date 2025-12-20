@@ -68,22 +68,53 @@ class SportsVenueServer:
             return self.handle_login(data)
         elif action == 'register':
             return self.handle_register(data)
-        elif action == 'get_available_slots':
+        elif action == 'get_available_slots':  #获取场馆各个场地时间段(各场地预约情况)
             return self.handle_get_slots(data)
-        elif action == 'book_venue':
+        elif action == 'book_venue':  #预约操作
             return self.handle_book(data)
-        elif action == 'get_my_reservations':
+        elif action == 'get_my_reservations':  #查看我的预约
             return self.handle_get_reservations(data)
         elif action == 'cancel_booking':
             return self.handle_cancel(data)
-        elif action == 'add_schedule':
+        elif action == 'add_schedule':  #教室导课
             return self.handle_add_schedule(data)
-        elif action == 'remove_schedule':
+        elif action == 'remove_schedule':  #教室删课
             return self.handle_remove_schedule(data)
-        elif action == 'get_my_schedules':
+        elif action == 'get_my_schedules':  #获取教师课表
             return self.handle_get_schedules(data)
-        elif action == 'check_in':
+        elif action == 'check_in':    # 签到(完成预约，否则扣信用分)
             return self.handle_check_in(data)
+        # --- Admin Actions ---
+        elif action == 'admin_get_venues':
+            return self.handle_admin_get_venues(data)
+        elif action == 'admin_add_venue':
+            return self.handle_admin_add_venue(data)
+        elif action == 'admin_update_venue':
+            return self.handle_admin_update_venue(data)
+        elif action == 'admin_delete_venue':
+            return self.handle_admin_delete_venue(data)
+        elif action == 'admin_get_courts':
+            return self.handle_admin_get_courts(data)
+        elif action == 'admin_add_court':
+            return self.handle_admin_add_court(data)
+        elif action == 'admin_delete_court':
+            return self.handle_admin_delete_court(data)
+        elif action == 'admin_get_users':
+            return self.handle_admin_get_users(data)
+        elif action == 'admin_update_user':
+            return self.handle_admin_update_user(data)
+        elif action == 'admin_delete_user':
+            return self.handle_admin_delete_user(data)
+        elif action == 'admin_get_all_reservations':  #管理员获取预约列表
+            return self.handle_admin_get_all_reservations(data)
+        elif action == 'admin_cancel_reservation':  #管理员强制取消预约
+            return self.handle_admin_cancel_reservation(data)
+        elif action == 'admin_add_announcement':   #管理员发布公告
+            return self.handle_admin_add_announcement(data)
+        elif action == 'get_announcements':
+            return self.handle_get_announcements(data)
+        elif action == 'admin_delete_announcement':
+            return self.handle_admin_delete_announcement(data)
         else:
             return {"status": "error", "message": f"未知的请求类型: {action}"}
 
@@ -222,6 +253,139 @@ class SportsVenueServer:
             return {"status": "error", "message": "缺少必要参数"}
             
         success, message = self.db_manager.check_in_reservation(user_account, reservation_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    # --- Admin Handlers ---
+
+    def handle_admin_get_venues(self, data):
+        success, result = self.db_manager.admin_get_venues()
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_admin_add_venue(self, data):
+        name = data.get('name')
+        is_outdoor = data.get('is_outdoor')
+        location = data.get('location')
+        description = data.get('description')
+        success, message = self.db_manager.admin_add_venue(name, is_outdoor, location, description)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_update_venue(self, data):
+        venue_id = data.get('venue_id')
+        name = data.get('name')
+        is_outdoor = data.get('is_outdoor')
+        location = data.get('location')
+        description = data.get('description')
+        success, message = self.db_manager.admin_update_venue(venue_id, name, is_outdoor, location, description)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_delete_venue(self, data):
+        venue_id = data.get('venue_id')
+        success, message = self.db_manager.admin_delete_venue(venue_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_get_courts(self, data):
+        venue_id = data.get('venue_id')
+        success, result = self.db_manager.admin_get_courts(venue_id)
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_admin_add_court(self, data):
+        venue_id = data.get('venue_id')
+        name = data.get('name')
+        success, message = self.db_manager.admin_add_court(venue_id, name)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_delete_court(self, data):
+        court_id = data.get('court_id')
+        success, message = self.db_manager.admin_delete_court(court_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_get_users(self, data):
+        success, result = self.db_manager.admin_get_users()
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_admin_update_user(self, data):
+        account = data.get('account')
+        name = data.get('name')
+        role = data.get('role')
+        phone = data.get('phone')
+        credit_score = data.get('credit_score')
+        success, message = self.db_manager.admin_update_user(account, name, role, phone, credit_score)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_delete_user(self, data):
+        account = data.get('account')
+        success, message = self.db_manager.admin_delete_user(account)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_get_all_reservations(self, data):
+        success, result = self.db_manager.admin_get_all_reservations()
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_admin_cancel_reservation(self, data):
+        reservation_id = data.get('reservation_id')
+        success, message = self.db_manager.admin_cancel_reservation(reservation_id)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_admin_add_announcement(self, data):
+        title = data.get('title')
+        content = data.get('content')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        success, message = self.db_manager.admin_add_announcement(title, content, start_date, end_date)
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "fail", "message": message}
+
+    def handle_get_announcements(self, data):
+        success, result = self.db_manager.get_announcements()
+        if success:
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "fail", "message": result}
+
+    def handle_admin_delete_announcement(self, data):
+        ann_id = data.get('ann_id')
+        success, message = self.db_manager.admin_delete_announcement(ann_id)
         if success:
             return {"status": "success", "message": message}
         else:

@@ -614,3 +614,277 @@ class DBManager:
             return False, str(e)
         finally:
             conn.close()
+
+    # 管理员功能↓--- Admin Functions ---
+
+    def admin_get_venues(self):
+        """获取所有场馆信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM venues")
+            rows = cursor.fetchall()
+            venues = []
+            for row in rows:
+                venues.append({
+                    "venue_id": row[0],
+                    "venue_name": row[1],
+                    "is_outdoor": bool(row[2]),
+                    "location": row[3],
+                    "description": row[4]
+                })
+            return True, venues
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_add_venue(self, name, is_outdoor, location, description):
+        """添加场馆"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("INSERT INTO venues (venue_name, is_outdoor, location, description) VALUES (?, ?, ?, ?)",
+                           (name, is_outdoor, location, description))
+            conn.commit()
+            return True, "添加成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_update_venue(self, venue_id, name, is_outdoor, location, description):
+        """更新场馆"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE venues SET venue_name=?, is_outdoor=?, location=?, description=? WHERE venue_id=?",
+                           (name, is_outdoor, location, description, venue_id))
+            conn.commit()
+            return True, "更新成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_delete_venue(self, venue_id):
+        """删除场馆"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # 级联删除场地? 或者检查是否有场地
+            cursor.execute("DELETE FROM venues WHERE venue_id=?", (venue_id,))
+            conn.commit()
+            return True, "删除成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_get_courts(self, venue_id):
+        """获取某场馆的所有场地"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM courts WHERE venue_id=?", (venue_id,))
+            rows = cursor.fetchall()
+            courts = []
+            for row in rows:
+                courts.append({
+                    "court_id": row[0],
+                    "venue_id": row[1],
+                    "court_name": row[2]
+                })
+            return True, courts
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_add_court(self, venue_id, name):
+        """添加场地"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("INSERT INTO courts (venue_id, court_name) VALUES (?, ?)", (venue_id, name))
+            conn.commit()
+            return True, "添加成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_delete_court(self, court_id):
+        """删除场地"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM courts WHERE court_id=?", (court_id,))
+            conn.commit()
+            return True, "删除成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_get_users(self):
+        """获取所有用户"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT user_account, name, role, phone, credit_score FROM users")
+            rows = cursor.fetchall()
+            users = []
+            for row in rows:
+                users.append({
+                    "account": row[0],
+                    "name": row[1],
+                    "role": row[2],
+                    "phone": row[3],
+                    "credit_score": row[4]
+                })
+            return True, users
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_update_user(self, account, name, role, phone, credit_score):
+        """更新用户信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE users SET name=?, role=?, phone=?, credit_score=? WHERE user_account=?",
+                           (name, role, phone, credit_score, account))
+            conn.commit()
+            return True, "更新成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_delete_user(self, account):
+        """删除用户"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM users WHERE user_account=?", (account,))
+            conn.commit()
+            return True, "删除成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_get_all_reservations(self):
+        """获取所有预约"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            sql = """
+                SELECT r.reservation_id, r.user_account, v.venue_name, c.court_name, ts.date, ts.start_time, ts.end_time, r.status
+                FROM reservations r
+                JOIN time_slots ts ON r.slot_id = ts.slot_id
+                JOIN courts c ON ts.court_id = c.court_id
+                JOIN venues v ON c.venue_id = v.venue_id
+                ORDER BY r.create_time DESC
+            """
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            res_list = []
+            for row in rows:
+                res_list.append({
+                    "id": row[0],
+                    "user": row[1],
+                    "venue": row[2],
+                    "court": row[3],
+                    "date": row[4],
+                    "time": f"{row[5]}-{row[6]}",
+                    "status": row[7]
+                })
+            return True, res_list
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_cancel_reservation(self, reservation_id):
+        """管理员强制取消预约"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            import datetime
+            # 获取 slot_id
+            cursor.execute("SELECT slot_id FROM reservations WHERE reservation_id=?", (reservation_id,))
+            res = cursor.fetchone()
+            if not res:
+                return False, "预约不存在"
+            slot_id = res[0]
+
+            # 更新状态
+            cursor.execute("UPDATE reservations SET status='cancelled_by_admin', cancel_time=? WHERE reservation_id=?", 
+                           (datetime.datetime.now(), reservation_id))
+            
+            # 释放名额
+            cursor.execute("UPDATE time_slots SET current_reservations = current_reservations - 1 WHERE slot_id=?", (slot_id,))
+            
+            conn.commit()
+            return True, "取消成功"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_add_announcement(self, title, content, start_date, end_date):
+        """发布公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            import datetime
+            create_time = datetime.datetime.now()
+            cursor.execute("INSERT INTO announcements (title, content, start_date, end_date, create_time) VALUES (?, ?, ?, ?, ?)",
+                           (title, content, start_date, end_date, create_time))
+            conn.commit()
+            return True, "发布成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_announcements(self):
+        """获取有效公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            import datetime
+            today = datetime.date.today()
+            cursor.execute("SELECT * FROM announcements WHERE end_date >= ? ORDER BY create_time DESC", (today,))
+            rows = cursor.fetchall()
+            anns = []
+            for row in rows:
+                anns.append({
+                    "id": row[0],
+                    "title": row[1],
+                    "content": row[2],
+                    "start_date": row[4],
+                    "end_date": row[5]
+                })
+            return True, anns
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def admin_delete_announcement(self, ann_id):
+        """删除公告"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM announcements WHERE announcement_id=?", (ann_id,))
+            conn.commit()
+            return True, "删除成功"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
