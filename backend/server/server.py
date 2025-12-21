@@ -404,7 +404,7 @@ class SportsVenueServer:
                 now = datetime.datetime.now()
                 # 每天晚上 22:00 执行 (这里为了演示，可以设为每分钟检查一次，或者严格判断时间)
                 # 简单逻辑: 每分钟检查一次，如果是 22:00 则执行
-                if now.hour == 22 and now.minute == 0:
+                if now.hour >= 22 and now.minute >= 0:
                     print(f"[Scheduler] 开始执行每日检查爽约任务 @ {now}")
                     self.db_manager.process_daily_tasks()
                     # 休眠 61 秒防止重复执行
